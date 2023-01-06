@@ -1,0 +1,7 @@
+Sometimes combining all the .ts files fails. 
+
+In which case you can combine them manually in CMD:
+type *.ts > combined.raw
+
+And then convert it to mp4:
+ffmpeg -i combined.raw -vcodec copy -acodec copy combined.mp4
