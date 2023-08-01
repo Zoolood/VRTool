@@ -1,23 +1,33 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
+using System;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Net;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
 
 namespace VRCamRipper
 {
+    public class PayloadResponse
+    {
+        public string payloadData { get; set; }
+    }
+
+    public class Payload
+    {
+        public string requestId { get; set; }
+        public PayloadResponse response { get; set; }
+        public string timestamp { get; set; }
+        public string data;
+    }
+
     public partial class frmMain : Form
     {
+        private WebClient _webClient;
         public frmMain()
         {
             InitializeComponent();
+            _webClient = new WebClient();
 
             this.webView.CoreWebView2InitializationCompleted += WebView_CoreWebView2InitializationCompleted;
             InitializeAsync();
@@ -28,14 +38,36 @@ namespace VRCamRipper
             webView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.webSocketFrameReceived").DevToolsProtocolEventReceived += OnConsoleMessage;
             await webView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{ }");
 
-            this.webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Linux; Android 10; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/13.0.0.2.16.259832224 SamsungBrowser/4.0 Chrome/87.0.4280.66 VR Safari/537.36";
+            webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+            webView.CoreWebView2.WebResourceRequested += CoreWebView2_WebResourceRequested;
+
+            this.webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Linux; Android 10; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/16.6.0.1.52.314146309 SamsungBrowser/4.0 Chrome/91.0.4472.164 VR Safari/537.36";
         }
 
+        private void CoreWebView2_WebResourceRequested(object sender, CoreWebView2WebResourceRequestedEventArgs e)
+        {
+            if (e.Request.Uri.EndsWith(".mp4"))
+            {
+                string name = txtAddress.Text.Split('/').Last();
+
+                if (!Directory.Exists(Path.Combine(name, "data")))
+                {
+                    Directory.CreateDirectory(Path.Combine(name, "data"));
+                }
+
+                if (e.Request.Uri.Contains("init"))
+                {
+                    _webClient.DownloadFile(e.Request.Uri, Path.Combine(Path.Combine(name, "data"), "0" + e.Request.Uri.Split('/').Last()));
+                }
+                else
+                {
+                    _webClient.DownloadFile(e.Request.Uri, Path.Combine(Path.Combine(name, "data"), e.Request.Uri.Split('/').Last()));
+                }
+            }
+        }
         private async void InitializeAsync()
         {
             await webView.EnsureCoreWebView2Async();
-
-            webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
         }
 
         private void btnNavigate_Click(object sender, EventArgs e)
@@ -61,6 +93,12 @@ namespace VRCamRipper
                 {
                     var payload = JsonConvert.DeserializeObject<Payload>(e.ParameterObjectAsJson);
 
+                    if (payload == null || payload.response == null || string.IsNullOrWhiteSpace(payload.response.payloadData))
+                    {
+                        return;
+                    }
+
+                    byte[] data = Convert.FromBase64String(payload.response.payloadData);
                     string name = txtAddress.Text.Split('/').Last();
 
                     if (!Directory.Exists(Path.Combine(name, payload.requestId)))
@@ -68,7 +106,6 @@ namespace VRCamRipper
                         Directory.CreateDirectory(Path.Combine(name, payload.requestId));
                     }
 
-                    byte[] data = Convert.FromBase64String(payload.response.payloadData);
                     File.WriteAllBytes(Path.Combine(Path.Combine(name, payload.requestId), payload.timestamp + ".dat"), data);
                 }
                 catch
