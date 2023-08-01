@@ -23,7 +23,9 @@ namespace VRCamRipper
 
     public partial class frmMain : Form
     {
+        int count = 0;
         private WebClient _webClient;
+
         public frmMain()
         {
             InitializeComponent();
@@ -50,18 +52,33 @@ namespace VRCamRipper
             {
                 string name = txtAddress.Text.Split('/').Last();
 
-                if (!Directory.Exists(Path.Combine(name, "data")))
+                string path = Path.Combine(name, count.ToString());
+
+                if (count == 0)
                 {
-                    Directory.CreateDirectory(Path.Combine(name, "data"));
+                    count += Directory.GetDirectories(name).Length - 1;
+
+                    if (!Directory.Exists(path))
+                    {
+                        Directory.CreateDirectory(path);
+                    }
                 }
 
                 if (e.Request.Uri.Contains("init"))
                 {
-                    _webClient.DownloadFile(e.Request.Uri, Path.Combine(Path.Combine(name, "data"), "0" + e.Request.Uri.Split('/').Last()));
+                    count++;
+                    path = Path.Combine(name, count.ToString());
+
+                    if (!Directory.Exists(path))
+                    {
+                        Directory.CreateDirectory(path);
+                    }
+
+                    _webClient.DownloadFile(e.Request.Uri, Path.Combine(path, "0" + e.Request.Uri.Split('/').Last()));
                 }
                 else
                 {
-                    _webClient.DownloadFile(e.Request.Uri, Path.Combine(Path.Combine(name, "data"), e.Request.Uri.Split('/').Last()));
+                    _webClient.DownloadFile(e.Request.Uri, Path.Combine(path, e.Request.Uri.Split('/').Last()));
                 }
             }
         }
@@ -76,6 +93,14 @@ namespace VRCamRipper
             {
                 try
                 {
+                    count = 0;
+                    string name = txtAddress.Text.Split('/').Last();
+
+                    if (!Directory.Exists(name))
+                    {
+                        Directory.CreateDirectory(name);
+                    }
+
                     webView.CoreWebView2.Navigate(txtAddress.Text);
                 }
                 catch (Exception err)
